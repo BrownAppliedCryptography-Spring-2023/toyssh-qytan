@@ -1,9 +1,9 @@
 #include <boost/asio.hpp>
 #include <memory>
-// #include <sodium.h>
+#include <sodium.h>
 
-// #include "packet.h"
-// #include "../../include/"
+#include "packet.h"
+
 #include "pkg/ssh_client.hpp"
 #include "util/ssh.hpp"
 #include "util/util.hpp"
@@ -24,7 +24,7 @@ void SSHClient::key_exchange() {
     data.push_back(SSH_MSG_KEXINIT); /* SSH_MSG_KEXINIT */
 
     unsigned char cookie[16];
-    // randombytes_buf(cookie, 16);
+    randombytes_buf(cookie, 16);
     data.insert(data.end(), std::begin(cookie), std::end(cookie));
 
     // ssh_algo_put(data, kexs);
