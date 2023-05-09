@@ -2,8 +2,8 @@
 
 #include <string>
 
-#include "drivers/network_driver.hpp"
-#include "drivers/crypto_driver.hpp"
+#include "../drivers/network_driver.hpp"
+#include "../drivers/crypto_driver.hpp"
 
 class SSHClient {
 public:

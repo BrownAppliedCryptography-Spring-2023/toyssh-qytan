@@ -5,7 +5,7 @@
 #include <boost/asio.hpp>
 #include <boost/system/error_code.hpp>
 
-#include "util/messages.hpp"
+#include "../util/messages.hpp"
 
 class NetworkDriver {
 public:

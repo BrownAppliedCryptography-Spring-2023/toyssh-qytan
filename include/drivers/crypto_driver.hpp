@@ -6,7 +6,7 @@
 #include <iostream>
 #include <string>
 
-#include "util/messages.hpp"
+#include "../util/messages.hpp"
 
 class CryptoDriver {
 public:
