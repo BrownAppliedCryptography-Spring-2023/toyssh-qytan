@@ -10,9 +10,9 @@
 #include <crypto++/files.h>
 #include <crypto++/queue.h>
 
-#include "../../include-shared/constants.hpp"
-#include "../../include-shared/util.hpp"
-#include "../../include/drivers/crypto_driver.hpp"
+#include "util/constants.hpp"
+#include "util/util.hpp"
+#include "drivers/crypto_driver.hpp"
 
 using namespace CryptoPP;
 
