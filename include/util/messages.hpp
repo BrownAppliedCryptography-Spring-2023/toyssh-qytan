@@ -29,10 +29,10 @@ enum T {
 // ================================================
 
 struct Serializable {
-    using buf = std::vector<unsigned char>;
-    using const_buf = const buf;
-    virtual buf serialize() = 0;
-    virtual int deserialize(const_buf &data) = 0;
+  using buf = std::vector<unsigned char>;
+  using const_buf = const buf;
+  virtual buf serialize() = 0;
+  virtual int deserialize(const_buf &data) = 0;
 };
 
 // ================================================
@@ -49,17 +49,17 @@ struct HMACTagged_Wrapper : public Serializable {
 };
 
 struct Packet : Serializable {
-    uint32_t    packet_length;
-    uint8_t     padding_length;
-    buf         payload;
-    buf         padding;
-    buf         mac;
+  uint32_t    packet_length;
+  uint8_t     padding_length;
+  buf         payload;
+  buf         padding;
+  buf         mac;
 
-    buf serialize() override;
-    int deserialize(const_buf &data, bool mac);
+  buf serialize() override;
+  int deserialize(const_buf &data, bool mac);
 
 private:
-    int deserialize(const_buf &data) override;
+  int deserialize(const_buf &data) override;
 };
 
 // ================================================

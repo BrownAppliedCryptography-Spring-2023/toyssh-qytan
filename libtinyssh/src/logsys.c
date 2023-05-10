@@ -153,7 +153,7 @@ static void logsys_utmp(const char *user, const char *host, const char *name, lo
 #endif
     if (flaglogin) {
 #ifdef HASUTMPLOGINLOGOUT
-        login(&ut);
+        // login(&ut);
 #else
         setutent();
         pututline(&ut);
@@ -162,14 +162,14 @@ static void logsys_utmp(const char *user, const char *host, const char *name, lo
     }
     else {
 #ifdef HASUTMPLOGINLOGOUT
-        logout(ut.ut_line);
+        // logout(ut.ut_line);
 #else
         setutent();
         pututline(&ut);
         endutent();
 #endif
 #if defined(HASUTMPLOGWTMP)
-        logwtmp(ut.ut_line, "", "");
+        // logwtmp(ut.ut_line, "", "");
 #endif
     }
 

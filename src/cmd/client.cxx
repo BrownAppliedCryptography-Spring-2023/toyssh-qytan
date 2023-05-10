@@ -10,12 +10,15 @@
 
 #include "../../include/util/logger.hpp"
 #include "pkg/ssh_client.hpp"
-// #include "global.h"
+
+extern "C" {
+#include "global.h"
+}
 
 #define BUFSIZE 1024
 
 int main(int argc, char **argv) {
-    // global_init();
+    global_init();
     initLogger();
     // if (sodium_init() != 0) {
     //     std::cerr << "sodium init failed" << std::endl;

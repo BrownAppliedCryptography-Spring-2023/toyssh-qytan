@@ -2,8 +2,14 @@
 
 #include <string>
 
-#include "../drivers/network_driver.hpp"
-#include "../drivers/crypto_driver.hpp"
+#include "drivers/network_driver.hpp"
+#include "drivers/crypto_driver.hpp"
+
+extern "C" {
+  #include "packet.h"
+}
+
+#define MAX_BUF (1 << 12) // It is not enough in reality
 
 class SSHClient {
 public:

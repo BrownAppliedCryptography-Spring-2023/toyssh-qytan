@@ -13,7 +13,7 @@ public:
   virtual void connect(std::string address, int port) = 0;
   virtual void disconnect() = 0;
   virtual void send(std::vector<unsigned char>& data) = 0;
-  virtual std::vector<unsigned char> read(size_t length) = 0;
+  virtual std::vector<unsigned char> read() = 0;
   virtual std::string get_remote_info() = 0;
 };
 
@@ -24,15 +24,17 @@ public:
   void connect(std::string address, int port) override;
   void disconnect() override;
   void send(std::vector<unsigned char>& data) override;
-  std::vector<unsigned char> read(size_t length) override;
+  std::vector<unsigned char> read() override;
   std::string get_remote_info() override;
 
 public:
+  bool kex = false;
   void ssh_send_banner();
   void ssh_recv_banner();
 
 private:
-  bool kex = false;
+  uint64_t send_packet_id;
+  uint64_t recv_packet_id;
   boost::asio::io_context io_context;
   std::shared_ptr<boost::asio::ip::tcp::socket> socket;
 };

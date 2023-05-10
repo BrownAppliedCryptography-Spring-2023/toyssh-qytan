@@ -1,6 +1,10 @@
+#include <boost/asio/completion_condition.hpp>
+#include <boost/system/error_code.hpp>
+#include <netinet/in.h>
 #include <stdexcept>
 #include <vector>
 
+#include "crypto/algorithms.hpp"
 #include "drivers/network_driver.hpp"
 #include "util/logger.hpp"
 
@@ -54,6 +58,7 @@ void SSHNetworkDriver::disconnect() {
  */
 void SSHNetworkDriver::send(std::vector<unsigned char>& data) {
   boost::asio::write(*this->socket, boost::asio::buffer(data));
+  send_packet_id++;
 }
 
 /**
@@ -61,18 +66,30 @@ void SSHNetworkDriver::send(std::vector<unsigned char>& data) {
  * @return std::vector<unsigned char> data read.
  * @throws error when eof.
  */
-std::vector<unsigned char> SSHNetworkDriver::read(size_t length) {
-  // read length
-  boost::system::error_code error;
-
+std::vector<unsigned char> SSHNetworkDriver::read() {
   // read message
-  std::vector<unsigned char> data(length);
-  boost::asio::read(*this->socket, boost::asio::buffer(data),
-                    boost::asio::transfer_exactly(length), error);
+  boost::system::error_code error;
+  uint32_t len;
+  boost::asio::read(*this->socket, boost::asio::buffer(&len, sizeof len),
+                    boost::asio::transfer_exactly(sizeof len), error);
   if (error) {
     throw std::runtime_error("Received EOF.");
   }
-  return data;
+
+  len = ntohl(len);
+  len += kex ? MAC_SIZE : 0;
+  std::vector<unsigned char> data(len);
+
+  boost::asio::read(*this->socket, boost::asio::buffer(data),
+                    boost::asio::transfer_exactly(len), error);
+  if (error) {
+    throw std::runtime_error("Received EOF.");
+  }
+  
+  recv_packet_id++;
+  Packet packet;
+  packet.deserialize(data, kex);
+  return packet.payload;
 }
 
 /**

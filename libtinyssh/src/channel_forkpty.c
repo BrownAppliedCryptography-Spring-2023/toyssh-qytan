@@ -13,19 +13,21 @@ Public domain.
 #include <fcntl.h>
 #include <termios.h>
 #include <sys/ioctl.h> 
+#include <pty.h>
+#include <utmp.h>
 extern char *ptsname(int);
 extern int grantpt(int);
 extern int unlockpt(int);
 
-#include "hasopenpty.h"
-#ifdef HASOPENPTY
-extern int openpty(int *, int *, char *, struct termios *, struct winsize *);
-#endif
+// #include "hasopenpty.h"
+// #ifdef HASOPENPTY
+// extern int openpty(int *, int *, char *, struct termios *, struct winsize *);
+// #endif
 
-#include "haslogintty.h"
-#ifdef HASLOGINTTY
-extern int login_tty(int);
-#endif
+// #include "haslogintty.h"
+// #ifdef HASLOGINTTY
+// extern int login_tty(int);
+// #endif
 
 #include "coe.h"
 #include "blocking.h"
