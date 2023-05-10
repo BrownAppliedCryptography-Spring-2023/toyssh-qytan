@@ -9,8 +9,41 @@ extern "C" {
 #include "randombytes.h"
 }
 
-namespace {
-    src::severity_logger<logging::trivial::severity_level> lg;
+/**
+ * serialize HMACTagged_Wrapper.
+ */
+void HMACTagged_Wrapper::serialize(std::vector<unsigned char> &data) {
+  // Add message type.
+  data.push_back((char)MessageType::HMACTagged_Wrapper);
+
+  // Add fields.
+  put_string(chvec2str(this->payload), data);
+
+  std::string iv = byteblock_to_string(this->iv);
+  put_string(iv, data);
+
+  put_string(this->mac, data);
+}
+
+/**
+ * deserialize HMACTagged_Wrapper.
+ */
+int HMACTagged_Wrapper::deserialize(std::vector<unsigned char> &data) {
+  // Check correct message type.
+  assert(data[0] == MessageType::HMACTagged_Wrapper);
+
+  // Get fields.
+  std::string payload_string;
+  int n = 1;
+  n += get_string(&payload_string, data, n);
+  this->payload = str2chvec(payload_string);
+
+  std::string iv;
+  n += get_string(&iv, data, n);
+  this->iv = string_to_byteblock(iv);
+
+  n += get_string(&this->mac, data, n);
+  return n;
 }
 
 Packet::buf Packet::serialize() {

@@ -11,6 +11,12 @@
 
 #include <boost/chrono.hpp>
 #include <boost/thread.hpp>
+#include <crypto++/cryptlib.h>
+#include <crypto++/dsa.h>
+#include <crypto++/filters.h>
+#include <crypto++/hex.h>
+#include <crypto++/integer.h>
+#include <crypto++/nbtheory.h>
 
 // ================================================
 // MESSAGE TYPES
@@ -40,9 +46,9 @@ struct Serializable {
 // ================================================
 
 struct HMACTagged_Wrapper : public Serializable {
-//   std::vector<unsigned char> payload;
-//   CryptoPP::SecByteBlock iv;
-//   std::string mac;
+  std::vector<unsigned char> payload;
+  CryptoPP::SecByteBlock iv;
+  std::string mac;
 
   void serialize(std::vector<unsigned char> &data);
   int deserialize(std::vector<unsigned char> &data);
