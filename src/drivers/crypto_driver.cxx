@@ -2,13 +2,16 @@
 #include <stdexcept>
 #include <string>
 
-#include "crypto++/base64.h"
-#include "crypto++/dsa.h"
-#include "crypto++/osrng.h"
-#include "crypto++/rsa.h"
-#include <crypto++/cryptlib.h>
-#include <crypto++/files.h>
-#include <crypto++/queue.h>
+#include <cryptopp/base64.h>
+#include <cryptopp/dsa.h>
+#include <cryptopp/osrng.h>
+#include <cryptopp/rsa.h>
+#include <cryptopp/cryptlib.h>
+#include <cryptopp/files.h>
+#include <cryptopp/queue.h>
+#include <cryptopp/xed25519.h>
+#include <cryptopp/filters.h>
+#include <cryptopp/hex.h>
 
 #include "util/constants.hpp"
 #include "util/util.hpp"
@@ -16,79 +19,29 @@
 
 using namespace CryptoPP;
 
-/**
- * @brief Encrypts the given message using AES and tags the ciphertext with an
- * HMAC. Outputs an HMACTagged_Wrapper as bytes.
- */
-std::vector<unsigned char>
-CryptoDriver::encrypt_and_tag(SecByteBlock AES_key, SecByteBlock HMAC_key,
-                              Serializable *message) {
-  // Serialize given message.
-  std::vector<unsigned char> plaintext;
-  message->serialize(plaintext);
 
-  // Encrypt the payload, generate iv to hmac.
-  std::pair<std::string, SecByteBlock> encrypted =
-      this->AES_encrypt(AES_key, chvec2str(plaintext));
-  std::string to_tag = std::string((const char *)encrypted.second.data(),
-                                   encrypted.second.size()) +
-                       encrypted.first;
-
-  // Generate HMAC on the payload.
-  HMACTagged_Wrapper msg;
-  msg.payload = str2chvec(encrypted.first);
-  msg.iv = encrypted.second;
-  msg.mac = this->HMAC_generate(HMAC_key, to_tag);
-
-  // Serialize the HMAC and payload.
-  std::vector<unsigned char> payload_data;
-  msg.serialize(payload_data);
-  return payload_data;
-}
-
-/**
- * @brief Verifies that the tagged HMAC is valid on the ciphertext and decrypts
- * the given message using AES. Takes in an HMACTagged_Wrapper as bytes.
- */
-std::pair<std::vector<unsigned char>, bool>
-CryptoDriver::decrypt_and_verify(SecByteBlock AES_key, SecByteBlock HMAC_key,
-                                 std::vector<unsigned char> ciphertext_data) {
-  // Deserialize
-  HMACTagged_Wrapper ciphertext;
-  ciphertext.deserialize(ciphertext_data);
-
-  // Verify HMAC
-  std::string to_verify =
-      std::string((const char *)ciphertext.iv.data(), ciphertext.iv.size()) +
-      chvec2str(ciphertext.payload);
-  bool valid = this->HMAC_verify(HMAC_key, to_verify, ciphertext.mac);
-
-  // Decrypt
-  std::string plaintext =
-      this->AES_decrypt(AES_key, ciphertext.iv, chvec2str(ciphertext.payload));
-  std::vector<unsigned char> plaintext_data = str2chvec(plaintext);
-  return std::make_pair(plaintext_data, valid);
-}
 
 /**
  * @brief Generate DH keypair.
  */
-std::tuple<DH, SecByteBlock, SecByteBlock> CryptoDriver::DH_initialize() {
-  DH DH_obj(DL_P, DL_Q, DL_G);
+std::tuple<x25519, SecByteBlock, SecByteBlock> 
+CryptoDriver::curve25519_initialize() {
   AutoSeededRandomPool prng;
-  SecByteBlock DH_private_key(DH_obj.PrivateKeyLength());
-  SecByteBlock DH_public_key(DH_obj.PublicKeyLength());
-  DH_obj.GenerateKeyPair(prng, DH_private_key, DH_public_key);
-  return std::make_tuple(DH_obj, DH_private_key, DH_public_key);
+  x25519 ecdh(prng);
+
+  SecByteBlock priv(ecdh.PrivateKeyLength());
+  SecByteBlock pub(ecdh.PublicKeyLength());
+  ecdh.GenerateKeyPair(prng, priv, pub);
+  return {ecdh, priv, pub};
 }
 
 /**
  * @brief Generates a shared secret.
  */
-SecByteBlock CryptoDriver::DH_generate_shared_key(
-    const DH &DH_obj, const SecByteBlock &DH_private_value,
+SecByteBlock CryptoDriver::curve25519_generate_shared_key(
+    const x25519 &DH_obj, const SecByteBlock &DH_private_value,
     const SecByteBlock &DH_other_public_value) {
-  // TODO: implement me!
+  
   SecByteBlock shared_key(DH_obj.AgreedValueLength());
   if(!DH_obj.Agree(shared_key, DH_private_value, DH_other_public_value)) {
     throw ::std::runtime_error("Failed to reach shared secret!");
@@ -96,6 +49,16 @@ SecByteBlock CryptoDriver::DH_generate_shared_key(
   return shared_key;
 }
 
+bool CryptoDriver::ed25519_verify(
+    const std::string &vk, const std::string &message, 
+    const std::string signature) {
+  
+  ed25519::Verifier verifier(string_to_byteblock(vk));
+  StringSource _(signature+message, true, 
+          new SignatureVerificationFilter(verifier,
+          NULLPTR, CryptoPP::SignatureVerificationFilter::THROW_EXCEPTION));
+  return true;
+}
 /**
  * @brief Generates AES key using HKDF with a salt.
  */
@@ -215,79 +178,6 @@ bool CryptoDriver::HMAC_verify(SecByteBlock key, std::string ciphertext,
   }
 }
 
-/**
- * @brief Generates DSA public and private keys. This function should:
- * 1) Generate a DSA::PrivateKey and a DSA::PublicKey of size DSA_KEYSIZE
- * using a CryptoPP::AutoSeededRandomPool
- * 2) Validate keys with a level of 3, throwing a runtime error if validation
- * fails.
- * @return tuple of DSA private key and public key
- */
-std::pair<DSA::PrivateKey, DSA::PublicKey> CryptoDriver::DSA_generate_keys() {
-  AutoSeededRandomPool rng;
-  // Generate Private Key
-  DSA::PrivateKey sk;
-  sk.GenerateRandomWithKeySize(rng, DSA_KEYSIZE);
-  
-  // Generate Public Key
-  DSA::PublicKey vk;
-  vk.AssignFrom(sk);
-  if (!sk.Validate(rng, 3) || !vk.Validate(rng, 3)) {
-    throw ::std::runtime_error("DSA key generation failed");
-  }
-  return {sk, vk};
-}
-
-/**
- * @brief Sign the given message with the given key. This function should:
- * 1) Initialize a DSA::Signer with the given key.
- * 2) Convert the message to a string using chvec2str.
- * 3) Use a SignerFilter to generate a signature.
- * @param signing_key DSA signing key
- * @param message message to sign
- * @return signature on message
- */
-std::string CryptoDriver::DSA_sign(const DSA::PrivateKey &signing_key,
-                                   std::vector<unsigned char> message) {
-  AutoSeededRandomPool rng;
-  ::std::string signature;
-
-  DSA::Signer signer( signing_key );
-  StringSource ss1( chvec2str(message), true, 
-      new SignerFilter( rng, signer,
-          new StringSink( signature )
-      ) // SignerFilter
-  ); // StringSource
-  return signature;
-}
-
-/**
- * @brief Verify that signature is valid with the given key. This function
- * should: 1) Initialize a DSA::Verifier with the given key. 2) Convert the
- * message to a string using chvev2str, and concat the signature. 3) Use a
- * SignatureVerificationFilter to verify the signature with the given flags.
- * @param signing_key DSA verification key
- * @param message signed message
- * @return true iff signature was valid on message
- */
-bool CryptoDriver::DSA_verify(const DSA::PublicKey &verification_key,
-                              std::vector<unsigned char> message,
-                              std::string signature) {
-  const int flags = SignatureVerificationFilter::PUT_RESULT |
-                    SignatureVerificationFilter::SIGNATURE_AT_END;
-  bool result = false;
-  DSA::Verifier verifier( verification_key );
-  StringSource ss2( chvec2str(message)+signature, true,
-      new SignatureVerificationFilter(
-          verifier, 
-          new ArraySink(
-            (byte*)&result, sizeof(result)), 
-          flags
-          /* SIGNATURE_AT_END */
-      )
-  );
-  return result;
-}
 
 /**
  * @brief Generate a pseudorandom value using AES_RNG given a seed and an iv.
@@ -337,3 +227,8 @@ std::string CryptoDriver::hash(std::string msg) {
   StringSource _s(msg, true, new HashFilter(hash, new StringSink(encodedHex)));
   return encodedHex;
 }
+
+void CryptoDriver::algo_select(std::string& choices, ALGO_TYPE::T) {
+  // currently do not need select
+}
+

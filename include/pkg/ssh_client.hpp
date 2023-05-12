@@ -1,13 +1,10 @@
 #pragma once
 
+#include <cryptopp/secblockfwd.h>
 #include <string>
 
 #include "drivers/network_driver.hpp"
 #include "drivers/crypto_driver.hpp"
-
-extern "C" {
-  #include "packet.h"
-}
 
 #define MAX_BUF (1 << 12) // It is not enough in reality
 
@@ -23,5 +20,18 @@ private:
   std::shared_ptr<CryptoDriver> crypto_driver;
   std::shared_ptr<SSHNetworkDriver> network_driver;
 
+  std::string server_banner;
+  std::string session_id;
+  std::string sign_pk;
+  CryptoPP::SecByteBlock shared_key;
+
+  CryptoPP::SecByteBlock iv_client_to_server;
+  CryptoPP::SecByteBlock enc_client_to_server;
+  CryptoPP::SecByteBlock mac_client_to_server;
+  CryptoPP::SecByteBlock iv_server_to_client;
+  CryptoPP::SecByteBlock enc_server_to_client;
+  CryptoPP::SecByteBlock mac_server_to_client;
+
+  void key_derive();
   void key_exchange();
 };

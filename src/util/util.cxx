@@ -1,7 +1,8 @@
 #include <vector>
-
+// #include <cryptopp/config_int.h>
 #include "util/util.hpp"
 #include "util/logger.hpp"
+
 
 /**
  * Convert char vec to string.
@@ -47,7 +48,7 @@ std::string byteblock_to_string(const CryptoPP::SecByteBlock &block) {
  * Converts a string into a byte block.
  */
 CryptoPP::SecByteBlock string_to_byteblock(const std::string &s) {
-  CryptoPP::SecByteBlock block(reinterpret_cast<const byte *>(&s[0]), s.size());
+  CryptoPP::SecByteBlock block(reinterpret_cast<const CryptoPP::byte *>(&s[0]), s.size());
   return block;
 }
 
@@ -96,7 +97,21 @@ std::vector<std::string> string_split(std::string str, char delimiter) {
   }
   return result;
 }
+void ssh_algo_put(std::vector<unsigned char>& data, 
+                    const std::vector<std::string>& algos) {
+    uint32_t len = algos.size() - 1;
+    for (auto &algo : algos) {
+        len += algo.size();
+    }
 
+    put_integer_big(len, data);
+
+    int j = 0;
+    for (auto &algo : algos) {
+        if (j++) data.push_back(',');
+        data.insert(data.end(), algo.begin(), algo.end());
+    }
+}
 
 void put_string(std::vector<unsigned char> &data, const std::string& s) {
     uint32_t len = s.size();
@@ -113,4 +128,30 @@ std::string get_string(const std::vector<unsigned char> &data, size_t &idx) {
     std::string s(data.begin() + idx, data.begin() + idx + len);
     idx += len;
     return s;
+}
+
+void put_chvec(std::vector<unsigned char> &data, std::vector<unsigned char> &vec) {
+    put_integer_big(static_cast<uint32_t>(vec.size()), data);
+    data.insert(data.end(), vec.begin(), vec.end());
+}
+
+/*
+Put SSH shared secret (bignum formated into wire format)
+*/
+int buf_putsharedsecret_(std::vector<unsigned char> &buf, 
+                      const unsigned char *x, long long len) {
+
+    long long pos;
+    for (pos = 0; pos < len; ++pos) if (x[pos]) break;
+
+    if (x[pos] & 0x80) {
+        put_integer_big(static_cast<uint32_t>(len - pos + 1), buf);
+        put_integer_big(0_u8, buf);
+    }
+    else {
+        put_integer_big(static_cast<uint32_t>(len - pos + 0), buf);
+    }
+    
+    while (pos < len) buf.push_back(x[pos++]);
+    return len;
 }

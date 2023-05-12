@@ -6,39 +6,47 @@
 #include <iostream>
 #include <string>
 
-#include <crypto++/cryptlib.h>
-#include <crypto++/dh.h>
-#include <crypto++/dh2.h>
-#include <crypto++/dsa.h>
-#include <crypto++/files.h>
-#include <crypto++/filters.h>
-#include <crypto++/hex.h>
-#include <crypto++/hkdf.h>
-#include <crypto++/hmac.h>
-#include <crypto++/integer.h>
-#include <crypto++/modes.h>
-#include <crypto++/nbtheory.h>
-#include <crypto++/osrng.h>
-#include <crypto++/rijndael.h>
-#include <crypto++/sha.h>
+#include <cryptopp/cryptlib.h>
+#include <cryptopp/xed25519.h>
+#include <cryptopp/dsa.h>
+#include <cryptopp/files.h>
+#include <cryptopp/filters.h>
+#include <cryptopp/hex.h>
+#include <cryptopp/hkdf.h>
+#include <cryptopp/hmac.h>
+#include <cryptopp/integer.h>
+#include <cryptopp/modes.h>
+#include <cryptopp/nbtheory.h>
+#include <cryptopp/osrng.h>
+#include <cryptopp/rijndael.h>
+#include <cryptopp/sha.h>
 
 #include "util/messages.hpp"
 
 using namespace CryptoPP;
 
+namespace ALGO_TYPE {
+enum T {
+    KEX,
+    HOST_KEY,
+    ENCRYPT_CLIENT_TO_SERVER,
+    ENCRYPT_SERVER_TO_CLIENT,
+    MAC_CLIENT_TO_SERVER,
+    MAC_SERVER_TO_CLIENT,
+    COMPRESS_CLIENT_TO_SERVER,
+    COMPRESS_SERVER_TO_CLIENT,
+};
+}
+
 class CryptoDriver {
 public:
-  std::vector<unsigned char> encrypt_and_tag(SecByteBlock AES_key,
-                                             SecByteBlock HMAC_key,
-                                             Serializable *message);
-  std::pair<std::vector<unsigned char>, bool>
-  decrypt_and_verify(SecByteBlock AES_key, SecByteBlock HMAC_key,
-                     std::vector<unsigned char> ciphertext_data);
 
-  std::tuple<DH, SecByteBlock, SecByteBlock> DH_initialize();
+  std::tuple<x25519, SecByteBlock, SecByteBlock> curve25519_initialize();
   SecByteBlock
-  DH_generate_shared_key(const DH &DH_obj, const SecByteBlock &DH_private_value,
+  curve25519_generate_shared_key(const x25519 &DH_obj, const SecByteBlock &DH_private_value,
                          const SecByteBlock &DH_other_public_value);
+
+  bool ed25519_verify(const std::string &vk, const std::string &message, const std::string signature);
 
   SecByteBlock AES_generate_key(const SecByteBlock &DH_shared_key);
   std::pair<std::string, SecByteBlock> AES_encrypt(SecByteBlock key,
@@ -50,14 +58,10 @@ public:
   std::string HMAC_generate(SecByteBlock key, std::string ciphertext);
   bool HMAC_verify(SecByteBlock key, std::string ciphertext, std::string hmac);
 
-  std::pair<DSA::PrivateKey, DSA::PublicKey> DSA_generate_keys();
-  std::string DSA_sign(const DSA::PrivateKey &DSA_signing_key,
-                       std::vector<unsigned char> message);
-  bool DSA_verify(const DSA::PublicKey &verification_key,
-                  std::vector<unsigned char> message, std::string signature);
 
   SecByteBlock prg(const SecByteBlock &seed, SecByteBlock iv, int size);
   Integer nowish();
   SecByteBlock png(int numBytes);
   std::string hash(std::string msg);
+  void algo_select(std::string& choices, ALGO_TYPE::T);
 };

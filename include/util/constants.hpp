@@ -1,7 +1,7 @@
 #pragma once
 
-#include <crypto++/cryptlib.h>
-#include <crypto++/integer.h>
+#include <cryptopp/cryptlib.h>
+#include <cryptopp/integer.h>
 
 #define SALT_SIZE 16  // 128 bits 16 bytes
 #define PEPPER_SIZE 1 // 8 bits   1 byte
@@ -35,3 +35,20 @@ const CryptoPP::Integer DL_G =
                       "5E2327CFEF98C582664B4C0F6CC41659");
 const CryptoPP::Integer DL_Q = CryptoPP::Integer(
     "0x8CF83642A709A097B447997640129DA299B1A47D1EB3750BA308B0FE64F5FBD3");
+
+#define MAC_ALGO "hmac-sha2-256"
+#define MAC_SIZE 32
+
+const std::string banner = "SSH-2.0-toy_ssh";
+
+const std::vector<std::string> kexs = {
+    "curve25519-sha256",
+};
+
+const std::vector<std::string> host_keys = {
+    "ssh-ed25519",
+};
+
+const std::vector<std::string> ciphers = {
+    "aes256-ctr",
+};

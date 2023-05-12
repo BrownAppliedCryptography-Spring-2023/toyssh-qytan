@@ -11,12 +11,12 @@
 
 #include <boost/chrono.hpp>
 #include <boost/thread.hpp>
-#include <crypto++/cryptlib.h>
-#include <crypto++/dsa.h>
-#include <crypto++/filters.h>
-#include <crypto++/hex.h>
-#include <crypto++/integer.h>
-#include <crypto++/nbtheory.h>
+#include <cryptopp/cryptlib.h>
+#include <cryptopp/dsa.h>
+#include <cryptopp/filters.h>
+#include <cryptopp/hex.h>
+#include <cryptopp/integer.h>
+#include <cryptopp/nbtheory.h>
 
 // ================================================
 // MESSAGE TYPES
@@ -50,8 +50,8 @@ struct HMACTagged_Wrapper : public Serializable {
   CryptoPP::SecByteBlock iv;
   std::string mac;
 
-  void serialize(std::vector<unsigned char> &data);
-  int deserialize(std::vector<unsigned char> &data);
+  buf serialize() override;
+  int deserialize(const_buf &data) override;
 };
 
 struct Packet : Serializable {

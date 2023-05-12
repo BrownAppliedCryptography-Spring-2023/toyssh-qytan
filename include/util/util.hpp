@@ -9,11 +9,11 @@
 #include <vector>
 #include <string>
 
-#include <crypto++/cryptlib.h>
-#include <crypto++/filters.h>
-#include <crypto++/hex.h>
-#include <crypto++/integer.h>
-#include <crypto++/misc.h>
+#include <cryptopp/cryptlib.h>
+#include <cryptopp/filters.h>
+#include <cryptopp/hex.h>
+#include <cryptopp/integer.h>
+#include <cryptopp/misc.h>
 
 // String <=> Vec<char>.
 std::string chvec2str(std::vector<unsigned char> data);
@@ -38,6 +38,11 @@ std::vector<std::string> string_split(std::string str, char delimiter);
 // my util
 void put_string(std::vector<unsigned char> &data, const std::string& s);
 std::string get_string(const std::vector<unsigned char> &data, size_t &idx);
+
+void put_chvec(std::vector<unsigned char> &buf, std::vector<unsigned char> &data);
+
+int buf_putsharedsecret_(std::vector<unsigned char> &buf, 
+                        const unsigned char *x, long long len);
 
 template<typename Integer,
     std::enable_if_t<std::is_integral<Integer>::value &&
@@ -74,22 +79,8 @@ int get_integer_big(Integer *num, const std::vector<unsigned char> &data,
     return sizeof(Integer);
 }
 
-template<typename ALGO>
 void ssh_algo_put(std::vector<unsigned char>& data, 
-                    const std::vector<ALGO>& algos) {
-    uint32_t len = algos.size() - 1;
-    for (auto &algo : algos) {
-        len += algo.name.size();
-    }
-
-    put_integer_big(len, data);
-
-    int j = 0;
-    for (auto &algo : algos) {
-        if (j++) data.push_back(',');
-        data.insert(data.end(), algo.name.begin(), algo.name.end());
-    }
-}
+                    const std::vector<std::string>& algos);
 
 inline constexpr unsigned char operator "" _u8( unsigned long long arg ) noexcept
 {

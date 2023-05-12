@@ -1,10 +1,11 @@
 #include <boost/asio/completion_condition.hpp>
+#include <boost/algorithm/string.hpp>
 #include <boost/system/error_code.hpp>
 #include <netinet/in.h>
 #include <stdexcept>
 #include <vector>
 
-#include "crypto/algorithms.hpp"
+#include "util/constants.hpp"
 #include "drivers/network_driver.hpp"
 #include "util/logger.hpp"
 
@@ -56,7 +57,7 @@ void SSHNetworkDriver::disconnect() {
  * Sends a fixed amount of data by sending length first.
  * @param data Bytes of data to send.
  */
-void SSHNetworkDriver::send(std::vector<unsigned char>& data) {
+void SSHNetworkDriver::send(const std::vector<unsigned char>& data) {
   boost::asio::write(*this->socket, boost::asio::buffer(data));
   send_packet_id++;
 }
@@ -102,19 +103,34 @@ std::string SSHNetworkDriver::get_remote_info() {
 
 
 void SSHNetworkDriver::ssh_send_banner() {
-  std::string banner = "SSH-2.0-toy_ssh\r\n";
-  
+  std::string data = banner;
+  std::string terminate = "\r\n";
+  data.insert(data.end(), terminate.begin(), terminate.end());
   /* The maximum banner length is 255 for SSH2 */
-  std::vector<unsigned char> buffer(banner.begin(), banner.end());
+  std::vector<unsigned char> buffer(data.begin(), data.end());
 
   this->send(buffer);
 }
 
-void SSHNetworkDriver::ssh_recv_banner() {
+std::string SSHNetworkDriver::ssh_recv_banner() {
   /* The maximum banner length is 255 for SSH2 */
-  boost::asio::streambuf buf(255);
-  boost::asio::read_until(*this->socket, buf, "\r\n");
-  std::string data = boost::asio::buffer_cast<const char*>(buf.data());
-
-  CUSTOM_LOG(lg, debug) << data;
+  // boost::asio::streambuf buf(255);
+  // When it is in the same packet, read_until has bug.
+  // boost::asio::read_until(*this->socket, buf, "\r\n");
+  // std::string data = boost::asio::buffer_cast<const char*>(buf.data());
+  std::string peer_banner;
+  char c1 = 0, c2 = 0;
+  boost::system::error_code error;
+  while(!(c1 == '\r' && c2 == '\n')) {
+    c1 = c2;
+    boost::asio::read(*this->socket, boost::asio::buffer(&c2, 1),
+                        boost::asio::transfer_exactly(1), error);
+    peer_banner += c2;
+    if (error) {
+      throw std::runtime_error("Received EOF.");
+    }
+  }
+  
+  boost::algorithm::trim(peer_banner);
+  return peer_banner;
 }
