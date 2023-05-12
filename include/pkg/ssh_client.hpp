@@ -15,8 +15,11 @@ public:
   void run();
 
 private:
+  uint32_t send_packet_id;
+  uint32_t recv_packet_id;
   std::string address;
   int port;
+  bool kex = false;
   std::shared_ptr<CryptoDriver> crypto_driver;
   std::shared_ptr<SSHNetworkDriver> network_driver;
 
@@ -32,6 +35,9 @@ private:
   CryptoPP::SecByteBlock enc_server_to_client;
   CryptoPP::SecByteBlock mac_server_to_client;
 
+  std::vector<unsigned char> read();
+  void send(const std::vector<unsigned char> &data);
   void key_derive();
   void key_exchange();
+  void auth();
 };

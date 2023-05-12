@@ -50,5 +50,5 @@ const std::vector<std::string> host_keys = {
 };
 
 const std::vector<std::string> ciphers = {
-    "aes256-ctr",
+    "aes128-ctr",
 };

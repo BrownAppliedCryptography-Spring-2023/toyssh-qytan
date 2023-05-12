@@ -55,7 +55,7 @@ public:
                           std::string ciphertext);
 
   SecByteBlock HMAC_generate_key(const SecByteBlock &DH_shared_key);
-  std::string HMAC_generate(SecByteBlock key, std::string ciphertext);
+  std::vector<CryptoPP::byte> HMAC_generate(SecByteBlock key, const std::vector<CryptoPP::byte> &ciphertext);
   bool HMAC_verify(SecByteBlock key, std::string ciphertext, std::string hmac);
 
 

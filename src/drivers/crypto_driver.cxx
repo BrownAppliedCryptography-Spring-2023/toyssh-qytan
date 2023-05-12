@@ -54,10 +54,9 @@ bool CryptoDriver::ed25519_verify(
     const std::string signature) {
   
   ed25519::Verifier verifier(string_to_byteblock(vk));
-  StringSource _(signature+message, true, 
-          new SignatureVerificationFilter(verifier,
-          NULLPTR, CryptoPP::SignatureVerificationFilter::THROW_EXCEPTION));
-  return true;
+  return verifier.VerifyMessage(
+    reinterpret_cast<const unsigned char *>(message.data()), message.size(), 
+    reinterpret_cast<const unsigned char *>(signature.data()), signature.size());
 }
 /**
  * @brief Generates AES key using HKDF with a salt.
@@ -144,13 +143,13 @@ CryptoDriver::HMAC_generate_key(const SecByteBlock &DH_shared_key) {
 /**
  * @brief Given a ciphertext, generates an HMAC
  */
-std::string CryptoDriver::HMAC_generate(SecByteBlock key,
-                                        std::string ciphertext) {
+std::vector<CryptoPP::byte> CryptoDriver::HMAC_generate(SecByteBlock key,
+                                        const std::vector<CryptoPP::byte> &ciphertext) {
   try {
-    ::std::string hmac;
+    ::std::vector<CryptoPP::byte> hmac;
     HMAC<SHA256> hm(key, key.size());
     
-    StringSource s(ciphertext, true, new HashFilter(hm, new StringSink(hmac)));
+    VectorSource _(ciphertext, true, new HashFilter(hm, new VectorSink(hmac)));
     return hmac;
   } catch (const CryptoPP::Exception &e) {
     std::cerr << e.what() << std::endl;

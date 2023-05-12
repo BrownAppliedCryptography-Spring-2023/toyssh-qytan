@@ -62,10 +62,8 @@ struct Packet : Serializable {
   buf         mac;
 
   buf serialize() override;
-  int deserialize(const_buf &data, bool mac);
-
-private:
   int deserialize(const_buf &data) override;
+  int deserialize_without_length(const_buf &data);
 };
 
 // ================================================

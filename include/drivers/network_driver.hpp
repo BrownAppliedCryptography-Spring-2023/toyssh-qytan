@@ -28,13 +28,11 @@ public:
   std::string get_remote_info() override;
 
 public:
-  bool kex = false;
+  std::vector<unsigned char> read(size_t size);
   void ssh_send_banner();
   std::string ssh_recv_banner();
 
 private:
-  uint64_t send_packet_id;
-  uint64_t recv_packet_id;
   boost::asio::io_context io_context;
   std::shared_ptr<boost::asio::ip::tcp::socket> socket;
 };

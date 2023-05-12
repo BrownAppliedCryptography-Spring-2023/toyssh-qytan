@@ -59,7 +59,6 @@ void SSHNetworkDriver::disconnect() {
  */
 void SSHNetworkDriver::send(const std::vector<unsigned char>& data) {
   boost::asio::write(*this->socket, boost::asio::buffer(data));
-  send_packet_id++;
 }
 
 /**
@@ -78,7 +77,6 @@ std::vector<unsigned char> SSHNetworkDriver::read() {
   }
 
   len = ntohl(len);
-  len += kex ? MAC_SIZE : 0;
   std::vector<unsigned char> data(len);
 
   boost::asio::read(*this->socket, boost::asio::buffer(data),
@@ -87,10 +85,22 @@ std::vector<unsigned char> SSHNetworkDriver::read() {
     throw std::runtime_error("Received EOF.");
   }
   
-  recv_packet_id++;
   Packet packet;
-  packet.deserialize(data, kex);
+  packet.deserialize_without_length(data);
   return packet.payload;
+}
+
+std::vector<unsigned char> SSHNetworkDriver::read(size_t size) {
+  boost::system::error_code error;
+  std::vector<unsigned char> data(size);
+
+  auto n = boost::asio::read(*this->socket, boost::asio::buffer(data),
+                    boost::asio::transfer_exactly(size), error);
+  assert(n == size);
+  if (error) {
+    throw std::runtime_error("Received EOF.");
+  }
+  return data;
 }
 
 /**

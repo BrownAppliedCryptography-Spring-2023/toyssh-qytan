@@ -1,6 +1,10 @@
 #include <boost/asio.hpp>
+#include <cryptopp/filters.h>
+#include <cryptopp/misc.h>
+#include <cryptopp/modes.h>
 #include <cryptopp/secblockfwd.h>
 #include <cryptopp/xed25519.h>
+#include <cstdlib>
 #include <memory>
 #include <stdexcept>
 #include <sys/wait.h>
@@ -28,7 +32,7 @@ SSHClient::SSHClient(std::string address, int port)
 
     this->network_driver->ssh_send_banner();
     this->server_banner = this->network_driver->ssh_recv_banner();
-
+    this->send_packet_id = this->recv_packet_id = 0;
 }
 
 namespace {
@@ -214,12 +218,10 @@ void SSHClient::key_derive() {
 
 void SSHClient::key_exchange() {
     auto data = kex_algo_send();
-    Packet packet;
-    packet.payload = data;
-    network_driver->send(packet.serialize());
+    this->send(data);
     auto client_kex_init = std::move(data); // store for hashing
 
-    data = network_driver->read();
+    data = this->read();
     kex_algo_recv(data, this->crypto_driver);
     auto server_kex_init = std::move(data);
 
@@ -231,12 +233,10 @@ void SSHClient::key_exchange() {
     data.push_back(SSH_MSG_KEXDH_INIT);
     put_integer_big(static_cast<uint32_t>(dh.PublicKeyLength()), data);
     data.insert(data.end(), pub.begin(), pub.end());
-    
-    packet.payload = std::move(data);
-    network_driver->send(packet.serialize());
+    this->send(data);
 
     // recv server public key
-    data = network_driver->read();
+    data = this->read();
     size_t idx = 0;
     unsigned char c;
     get_integer_big(&c, data, idx);
@@ -263,7 +263,7 @@ void SSHClient::key_exchange() {
 
     // kex_derivation(shared_key, session_id, 'A', session_id, crypto_driver);
     key_derive();
-    data = network_driver->read();
+    data = this->read();
     if (data[0] != SSH_MSG_NEWKEYS) {
         throw std::runtime_error("need rekey");
     }
@@ -275,22 +275,109 @@ void SSHClient::key_exchange() {
     hexdump("Client to Server Integrity Key", mac_client_to_server);
     hexdump("Server to Client Integrity Key", mac_server_to_client);
 
-    // God knows why it will fail even if the output is the same as libssh
-    // What's more, it seems that libssh doesn't verify this signature also.
-    // 0000004086C2F55BF130863A6B9D8C186F03B1C80793B27C475D852A8F104BD0EB199E0552A74BD0B4C9D6F99944A3402398375A2B3C70604BB7E7918C91E05E
-    // 86C2F55BF130863A6B9D8C186F03B1C80793B27C475D852A8F104BD0EB199E05
-    ed25519::Verifier verifier(string_to_byteblock(sign_pk));
-    auto valid = verifier.VerifyMessage((const unsigned char *)session_id.data(), session_id.size(), (const unsigned char *)signature.data(), signature.size());
-    if (!valid) {
+    if (!crypto_driver->ed25519_verify(sign_pk, session_id, signature)) {
         throw std::runtime_error("failed to verify packet");
     }
-    packet.payload = std::vector<unsigned char>(1, SSH_MSG_NEWKEYS);
-    network_driver->send(packet.serialize());
-    network_driver->kex = true;
+
+    this->send(std::vector<unsigned char>(1, SSH_MSG_NEWKEYS));
+    kex = true;
+}
+
+std::vector<unsigned char> SSHClient::read() {
+    uint32_t    packet_id = recv_packet_id++;
+    CUSTOM_LOG(lg, debug) << "packet id: " << packet_id;
+    if (!kex) {
+        return network_driver->read();
+    }
+
+    CTR_Mode< AES >::Decryption d;
+    auto data = network_driver->read(AES::BLOCKSIZE);
+    std::vector<CryptoPP::byte> recover;
+    auto iv = iv_server_to_client; // make a copy
+    d.SetKeyWithIV(enc_server_to_client, AES::DEFAULT_KEYLENGTH, iv, AES::BLOCKSIZE);
+    VectorSource _(data, true, new StreamTransformationFilter(
+        d, new VectorSink(recover)
+    ));
+    uint32_t len;
+    size_t idx = 0;
+    get_integer_big(&len, recover, idx);
+    auto remain = network_driver->read(len - (recover.size() - sizeof(len)));
+    VectorSource _2(remain, true, new StreamTransformationFilter(
+        d, new VectorSink(recover)
+    ));
+    hexdump("packet", recover);
+    
+    auto mac = network_driver->read(MAC_SIZE);
+    hexdump("mac", mac);
+    std::vector<CryptoPP::byte> mac_buf;
+    put_integer_big(packet_id, mac_buf);
+    mac_buf.insert(mac_buf.end(), recover.begin(), recover.end());
+    bool valid = crypto_driver->HMAC_verify(mac_server_to_client, 
+            std::string(mac_buf.begin(), mac_buf.end()), 
+                    std::string(mac.begin(), mac.end()));
+    if (!valid) {
+        throw std::runtime_error("mac verify failed");
+    }
+
+    Packet packet;
+    packet.deserialize(recover);
+    return packet.payload;
+}
+void SSHClient::send(const std::vector<unsigned char> &payload) {
+    uint32_t    packet_id = send_packet_id++;
+    uint32_t    packet_length;
+    uint8_t     padding_length;
+    if (!kex) {
+        Packet packet;
+        packet.payload = payload;
+        return network_driver->send(packet.serialize());
+    }
+    
+    uint32_t len = payload.size() + sizeof(packet_length) + sizeof(padding_length);
+    padding_length = 2 * AES::BLOCKSIZE - (len % AES::BLOCKSIZE);
+    // padding_length += (crypto_driver->png(1)[0] % 2) * AES::BLOCKSIZE;
+    packet_length = sizeof(padding_length) + payload.size() + padding_length;
+
+    std::vector<unsigned char> data;
+    put_integer_big(packet_id, data);
+    put_integer_big(packet_length, data);
+    put_integer_big(padding_length, data);
+    data.insert(data.end(), payload.begin(), payload.end());
+    data.resize(sizeof(packet_length) + packet_length + sizeof(packet_id));
+
+    auto hmac = crypto_driver->HMAC_generate(mac_client_to_server, data);
+    // remove packet id
+    data.erase(data.begin(), data.begin() + sizeof(packet_id));
+    // encrypt
+    std::vector<CryptoPP::byte> cipher;
+    CryptoPP::CTR_Mode<AES>::Encryption e;
+    e.SetKeyWithIV(enc_client_to_server, AES::DEFAULT_KEYLENGTH, iv_client_to_server, AES::BLOCKSIZE);
+    VectorSource _(data, true, new StreamTransformationFilter(
+        e, new VectorSink(cipher)
+    ));
+
+    cipher.insert(cipher.end(), hmac.begin(), hmac.end());
+    return network_driver->send(cipher);
+}
+
+void SSHClient::auth() {
+    std::vector<unsigned char> data;
+    data.push_back(SSH_MSG_SERVICE_REQUEST);
+    put_string(data, "ssh-userauth");
+    this->send(data);
+
+    auto recv = this->read();
+    size_t idx = 0;
+    if (recv[idx++] != SSH_MSG_SERVICE_ACCEPT) {
+        throw std::runtime_error("service accept failed");
+    }
+    auto acc = get_string(recv, idx);
+    CUSTOM_LOG(lg, debug) << "recv: " << acc;
 }
 
 void SSHClient::run() {
     this->key_exchange();
+    this->auth();
 }
 
 SSHClient::~SSHClient() {
