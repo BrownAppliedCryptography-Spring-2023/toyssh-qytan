@@ -39,6 +39,10 @@ const CryptoPP::Integer DL_Q = CryptoPP::Integer(
 #define MAC_ALGO "hmac-sha2-256"
 #define MAC_SIZE 32
 
+#define OPENSSH_HEADER_BEGIN "-----BEGIN OPENSSH PRIVATE KEY-----"
+#define OPENSSH_HEADER_END "-----END OPENSSH PRIVATE KEY-----"
+#define OPENSSH_AUTH_MAGIC      "openssh-key-v1"
+
 const std::string banner = "SSH-2.0-toy_ssh";
 
 const std::vector<std::string> kexs = {

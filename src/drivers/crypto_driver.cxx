@@ -76,23 +76,12 @@ SecByteBlock CryptoDriver::AES_generate_key(const SecByteBlock &DH_shared_key) {
 /**
  * @brief Encrypts the given plaintext.
  */
-std::pair<std::string, SecByteBlock>
-CryptoDriver::AES_encrypt(SecByteBlock key, std::string plaintext) {
+void
+CryptoDriver::AES_encrypt(const std::vector<unsigned char> &plaintext, std::vector<unsigned char> &cipher) {
   try {
-    ::std::string ciphertext;
-    AutoSeededRandomPool rng;
-    SecByteBlock iv(AES::BLOCKSIZE);
-
-    CBC_Mode< AES >::Encryption e;
-    e.GetNextIV(rng, iv);
-    e.SetKeyWithIV(key, key.size(), iv);
-    
-    StringSource s(plaintext, true, 
-        new StreamTransformationFilter(e,
-            new StringSink(ciphertext)
-        ) // StreamTransformationFilter
-    );
-    return {ciphertext, iv};
+    CryptoPP::VectorSource _(plaintext, true, new CryptoPP::StreamTransformationFilter(
+        e, new CryptoPP::VectorSink(cipher)
+    ));
   } catch (CryptoPP::Exception &e) {
     std::cerr << e.what() << std::endl;
     std::cerr << "This function was likely called with an incorrect shared key."
@@ -104,19 +93,11 @@ CryptoDriver::AES_encrypt(SecByteBlock key, std::string plaintext) {
 /**
  * @brief Decrypts the given ciphertext.
  */
-std::string CryptoDriver::AES_decrypt(SecByteBlock key, SecByteBlock iv,
-                                      std::string ciphertext) {
+void CryptoDriver::AES_decrypt(const std::vector<unsigned char> &ciphertext, std::vector<unsigned char> &recover) {
   try {
-    ::std::string recovered;
-    CBC_Mode< AES >::Decryption d;
-    d.SetKeyWithIV(key, key.size(), iv);
-
-    StringSource s(ciphertext, true, 
-        new StreamTransformationFilter(d,
-            new StringSink(recovered)
-        ) // StreamTransformationFilter
-    );
-    return recovered;
+    CryptoPP::VectorSource _(ciphertext, true, new CryptoPP::StreamTransformationFilter(
+        this->d, new CryptoPP::VectorSink(recover)
+    ));
   } catch (CryptoPP::Exception &e) {
     std::cerr << e.what() << std::endl;
     std::cerr << "This function was likely called with an incorrect shared key."
@@ -175,6 +156,12 @@ bool CryptoDriver::HMAC_verify(SecByteBlock key, std::string ciphertext,
       std::cerr << e.what() << std::endl;
       throw std::runtime_error("CryptoDriver HMAC verification failed.");
   }
+}
+
+void CryptoDriver::Enc_Setup(const CryptoPP::SecByteBlock &enc_key, const CryptoPP::SecByteBlock &enc_iv,
+                  const CryptoPP::SecByteBlock &dec_key, const CryptoPP::SecByteBlock &dec_iv) {
+  e.SetKeyWithIV(enc_key, CryptoPP::AES::DEFAULT_KEYLENGTH, enc_iv, CryptoPP::AES::BLOCKSIZE);
+  d.SetKeyWithIV(dec_key, CryptoPP::AES::DEFAULT_KEYLENGTH, dec_iv, CryptoPP::AES::BLOCKSIZE);
 }
 
 

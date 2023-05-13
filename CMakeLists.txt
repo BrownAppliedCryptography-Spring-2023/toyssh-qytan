@@ -5,7 +5,7 @@ project(ToySSH VERSION 1.0)
 set(CLIENT_EXEC_NAME toy_ssh)
 set(SERVER_EXEC_NAME toy_sshd)
 set(LIBRARY_NAME toy_ssh_lib)
-# set(LIBRARY_NAME_CRYPTO tinyssh_lib)
+set(LIBRARY_NAME_CRYPTO tinyssh)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # packages

@@ -2,8 +2,11 @@
 #include <cryptopp/filters.h>
 #include <cryptopp/misc.h>
 #include <cryptopp/modes.h>
+#include <cryptopp/osrng.h>
 #include <cryptopp/secblockfwd.h>
+#include <cryptopp/base64.h>
 #include <cryptopp/xed25519.h>
+#include <cstdint>
 #include <cstdlib>
 #include <memory>
 #include <stdexcept>
@@ -18,13 +21,12 @@
 #include "util/logger.hpp"
 #include "util/constants.hpp"
 
-
 namespace {
     src::severity_logger<logging::trivial::severity_level> lg;
 }
 
-SSHClient::SSHClient(std::string address, int port)
-    : address(address), port(port)
+SSHClient::SSHClient(std::string name, std::string address, int port)
+    : name(name), address(address), port(port)
 {
     this->crypto_driver = ::std::make_shared<CryptoDriver>();
     this->network_driver = ::std::make_shared<SSHNetworkDriver>();
@@ -123,6 +125,26 @@ void put_sign_pubkey(std::vector<unsigned char> &data,
     put_string(data, pub);
 }
 
+std::string get_sign_privkey_from_file(
+        const std::vector<unsigned char> &data, size_t &idx) {
+    uint32_t len, checkint1, checkint2;
+    get_integer_little(&len, data, idx);
+    get_integer_little(&checkint1, data, idx);
+    get_integer_little(&checkint2, data, idx);
+    if (checkint1 != checkint2) {
+        throw std::runtime_error("OpenSSH private key unpack error");
+    }
+
+    auto algo_name = get_string_from_file(data, idx);
+    assert(algo_name == "ssh-ed25519");
+    get_string_from_file(data, idx);          // public key first
+    auto priv = get_string_from_file(data, idx);
+    if (idx < data.size()) {
+        CUSTOM_LOG(lg, info) << "find private key for " << get_string_from_file(data, idx);
+    }
+    return priv;
+}
+
 std::string get_sign_pubkey(
                 const std::vector<unsigned char> &data, size_t &idx) {
     uint32_t len;
@@ -130,6 +152,15 @@ std::string get_sign_pubkey(
     auto algo_name = get_string(data, idx);
     assert(algo_name == "ssh-ed25519");
     return get_string(data, idx);
+}
+
+std::string get_sign_pubkey_from_file(
+                const std::vector<unsigned char> &data, size_t &idx) {
+    uint32_t len;
+    get_integer_little(&len, data, idx);
+    auto algo_name = get_string_from_file(data, idx);
+    assert(algo_name == "ssh-ed25519");
+    return get_string_from_file(data, idx);
 }
 
 std::string get_signature(
@@ -180,11 +211,63 @@ std::string get_session_id(
 
 template<typename T>
 void hexdump(std::string desr, const T& s) {
-    std::cout << desr << ": ";
+    std::cout << desr << ":";
+    size_t i = 0;
     for (auto c : s) {
+        if (i % 8 == 0) printf(" ");
+        if (i % 16 == 0) printf("\n");
         printf("%02X", (unsigned char) c);
+        i++;
     }
     std::cout << std::endl;
+}
+
+std::pair<std::string, std::string> import_auth_key(const std::string &file) {
+    std::ifstream priv_file("/home/qiyetan/.ssh/id_ed25519");
+    std::stringstream strStream;
+    strStream << priv_file.rdbuf();
+    priv_file.close();
+
+    auto cipher = strStream.str();
+    int cmp = strncmp(cipher.data(), OPENSSH_HEADER_BEGIN, strlen(OPENSSH_HEADER_BEGIN));
+    if (cmp != 0) {
+        std::cerr << "no header" << std::endl;
+    }
+    size_t idx = strlen(OPENSSH_HEADER_BEGIN);
+    size_t end = cipher.find(OPENSSH_HEADER_END);
+    if (end == std::string::npos) {
+        std::cerr << "no tail" << std::endl;
+    }
+
+    std::vector<CryptoPP::byte> base64;
+    while (idx < end) {
+        auto c = cipher[idx++];
+        if (!std::isspace(c)) {
+            base64.push_back(c);
+        }
+    }
+
+    std::vector<CryptoPP::byte> data;
+    CryptoPP::Base64Decoder decoder(new CryptoPP::VectorSink(data));
+    decoder.Put(base64.data(), base64.size());
+    decoder.MessageEnd();
+
+    // OpenSSH private key format
+    idx = strlen(OPENSSH_AUTH_MAGIC) + 4; // openssh header
+
+    // do not support passphrase, skip it
+    idx += 2 * (4 + 4) + 1;
+
+    uint32_t nkey;
+
+    get_integer_little(&nkey, data, idx);
+    if (nkey != 1) {
+        throw std::runtime_error("only support 1 key in a file currently");
+    }
+
+    auto pub = get_sign_pubkey_from_file(data, idx);
+    auto priv = get_sign_privkey_from_file(data, idx);
+    return {priv, pub};
 }
 
 }
@@ -281,30 +364,24 @@ void SSHClient::key_exchange() {
 
     this->send(std::vector<unsigned char>(1, SSH_MSG_NEWKEYS));
     kex = true;
+    crypto_driver->Enc_Setup(enc_client_to_server, iv_client_to_server, enc_server_to_client, iv_server_to_client);
 }
 
 std::vector<unsigned char> SSHClient::read() {
     uint32_t    packet_id = recv_packet_id++;
-    CUSTOM_LOG(lg, debug) << "packet id: " << packet_id;
     if (!kex) {
         return network_driver->read();
     }
 
-    CTR_Mode< AES >::Decryption d;
-    auto data = network_driver->read(AES::BLOCKSIZE);
+    auto data = network_driver->read(CryptoPP::AES::BLOCKSIZE);
     std::vector<CryptoPP::byte> recover;
-    auto iv = iv_server_to_client; // make a copy
-    d.SetKeyWithIV(enc_server_to_client, AES::DEFAULT_KEYLENGTH, iv, AES::BLOCKSIZE);
-    VectorSource _(data, true, new StreamTransformationFilter(
-        d, new VectorSink(recover)
-    ));
+    crypto_driver->AES_decrypt(data, recover);
+
     uint32_t len;
     size_t idx = 0;
     get_integer_big(&len, recover, idx);
     auto remain = network_driver->read(len - (recover.size() - sizeof(len)));
-    VectorSource _2(remain, true, new StreamTransformationFilter(
-        d, new VectorSink(recover)
-    ));
+    crypto_driver->AES_decrypt(remain, recover);
     hexdump("packet", recover);
     
     auto mac = network_driver->read(MAC_SIZE);
@@ -334,7 +411,7 @@ void SSHClient::send(const std::vector<unsigned char> &payload) {
     }
     
     uint32_t len = payload.size() + sizeof(packet_length) + sizeof(padding_length);
-    padding_length = 2 * AES::BLOCKSIZE - (len % AES::BLOCKSIZE);
+    padding_length = 2 * CryptoPP::AES::BLOCKSIZE - (len % CryptoPP::AES::BLOCKSIZE);
     // padding_length += (crypto_driver->png(1)[0] % 2) * AES::BLOCKSIZE;
     packet_length = sizeof(padding_length) + payload.size() + padding_length;
 
@@ -350,17 +427,15 @@ void SSHClient::send(const std::vector<unsigned char> &payload) {
     data.erase(data.begin(), data.begin() + sizeof(packet_id));
     // encrypt
     std::vector<CryptoPP::byte> cipher;
-    CryptoPP::CTR_Mode<AES>::Encryption e;
-    e.SetKeyWithIV(enc_client_to_server, AES::DEFAULT_KEYLENGTH, iv_client_to_server, AES::BLOCKSIZE);
-    VectorSource _(data, true, new StreamTransformationFilter(
-        e, new VectorSink(cipher)
-    ));
+    this->crypto_driver->AES_encrypt(data, cipher);
 
     cipher.insert(cipher.end(), hmac.begin(), hmac.end());
     return network_driver->send(cipher);
 }
 
 void SSHClient::auth() {
+    const std::string priv_file = "/home/qiyetan/.ssh/id_ed25519";
+    const std::string algo_name = "ssh-ed25519";
     std::vector<unsigned char> data;
     data.push_back(SSH_MSG_SERVICE_REQUEST);
     put_string(data, "ssh-userauth");
@@ -369,10 +444,50 @@ void SSHClient::auth() {
     auto recv = this->read();
     size_t idx = 0;
     if (recv[idx++] != SSH_MSG_SERVICE_ACCEPT) {
-        throw std::runtime_error("service accept failed");
+        throw std::runtime_error("auth service failed");
     }
     auto acc = get_string(recv, idx);
-    CUSTOM_LOG(lg, debug) << "recv: " << acc;
+    if (acc != "ssh-userauth") {
+        throw std::runtime_error("auth service failed");
+    }
+
+    data.clear();
+    data.push_back(SSH_MSG_USERAUTH_REQUEST);
+    put_string(data, this->name);
+    put_string(data, "ssh-connection");
+    put_string(data, "publickey");
+    data.push_back(1U); // flag for signature
+    put_string(data, algo_name);
+
+    auto [priv, pub] = import_auth_key(priv_file);
+    put_sign_pubkey(data, pub);
+    hexdump("public key", pub);
+
+    CryptoPP::ed25519::Signer signer(string_to_byteblock(priv));
+    CryptoPP::AutoSeededRandomPool prng;
+    if (!signer.GetPrivateKey().Validate(prng, 3)) {
+        throw std::runtime_error("Load private key failed");
+    }
+
+    std::string signature;
+    std::vector<unsigned char> sign_input;
+    put_string(sign_input, session_id);
+    sign_input.insert(sign_input.end(), data.begin(), data.end());
+
+    hexdump("sign input", sign_input);
+    hexdump("public key", pub);
+    hexdump("private key", priv);
+    CryptoPP::VectorSource _(sign_input, true, new CryptoPP::SignerFilter(
+        prng, signer, 
+        new CryptoPP::StringSink(signature)
+    ));
+    hexdump("signature", signature);
+
+    put_signature(data, signature);
+    this->send(data);
+
+    data = this->read();
+    hexdump("recv", data);
 }
 
 void SSHClient::run() {

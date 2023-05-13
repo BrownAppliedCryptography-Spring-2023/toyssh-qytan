@@ -121,6 +121,15 @@ void put_string(std::vector<unsigned char> &data, const std::string& s) {
     }
 }
 
+std::string get_string_from_file(const std::vector<unsigned char> &data, size_t &idx) {
+    uint32_t len;
+    get_integer_little(&len, data, idx);
+
+    std::string s(data.begin() + idx, data.begin() + idx + len);
+    idx += len;
+    return s;
+}
+
 std::string get_string(const std::vector<unsigned char> &data, size_t &idx) {
     uint32_t len;
     get_integer_big(&len, data, idx);

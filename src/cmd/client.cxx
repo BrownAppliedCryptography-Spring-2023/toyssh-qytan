@@ -16,7 +16,7 @@
 int main(int argc, char **argv) {
     initLogger();
 
-    SSHClient client("localhost", 22);
+    SSHClient client("qiyetan", "localhost", 22);
     client.run();
     return 0;
 }

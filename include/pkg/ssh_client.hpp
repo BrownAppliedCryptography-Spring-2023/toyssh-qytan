@@ -10,7 +10,7 @@
 
 class SSHClient {
 public:
-  SSHClient(std::string address, int port);
+  SSHClient(std::string name, std::string address, int port);
   ~SSHClient();
   void run();
 
@@ -18,6 +18,7 @@ private:
   uint32_t send_packet_id;
   uint32_t recv_packet_id;
   std::string address;
+  std::string name;
   int port;
   bool kex = false;
   std::shared_ptr<CryptoDriver> crypto_driver;

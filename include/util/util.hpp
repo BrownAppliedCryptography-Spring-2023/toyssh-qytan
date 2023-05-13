@@ -38,6 +38,7 @@ std::vector<std::string> string_split(std::string str, char delimiter);
 // my util
 void put_string(std::vector<unsigned char> &data, const std::string& s);
 std::string get_string(const std::vector<unsigned char> &data, size_t &idx);
+std::string get_string_from_file(const std::vector<unsigned char> &data, size_t &idx);
 
 void put_chvec(std::vector<unsigned char> &buf, std::vector<unsigned char> &data);
 
@@ -67,6 +68,21 @@ template<typename Integer,
     std::enable_if_t<std::is_integral<Integer>::value &&
         !std::is_signed<Integer>::value, bool> = true
 >
+int put_integer_little(Integer num, std::vector<unsigned char> &data) {
+    size_t len = sizeof(Integer);
+    size_t i = data.size();
+   
+    while(len--) {
+        data.push_back(num);
+        num >>= 8;
+    }
+    return sizeof(Integer);
+}
+
+template<typename Integer,
+    std::enable_if_t<std::is_integral<Integer>::value &&
+        !std::is_signed<Integer>::value, bool> = true
+>
 int get_integer_big(Integer *num, const std::vector<unsigned char> &data,
                 size_t &idx) {
     size_t len = sizeof(Integer);
@@ -74,6 +90,24 @@ int get_integer_big(Integer *num, const std::vector<unsigned char> &data,
    
     while(len--) {
         res = (res << 8) | data[idx++];
+    }
+    *num = res;
+    return sizeof(Integer);
+}
+
+template<typename Integer,
+    std::enable_if_t<std::is_integral<Integer>::value &&
+        !std::is_signed<Integer>::value, bool> = true
+>
+int get_integer_little(Integer *num, const std::vector<unsigned char> &data,
+                size_t &idx) {
+    size_t len = sizeof(Integer);
+    size_t offset = 8 * (len - 1);
+    Integer res = 0;
+   
+    while(len--) {
+        res |= data[idx++] << offset;
+        offset -= 8;
     }
     *num = res;
     return sizeof(Integer);
