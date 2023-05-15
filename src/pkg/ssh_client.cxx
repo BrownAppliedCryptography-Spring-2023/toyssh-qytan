@@ -17,6 +17,8 @@
 #include <signal.h>
 
 #include "drivers/crypto_driver.hpp"
+#include "drivers/ed25519_driver.hpp"
+#include "drivers/rsa_driver.hpp"
 #include "pkg/ssh_channel.hpp"
 #include "pkg/ssh_client.hpp"
 #include "secblock.h"
@@ -30,10 +32,6 @@ namespace {
 
 struct termios terminal;
 src::severity_logger<logging::trivial::severity_level> lg(logging::trivial::warning);
-
-std::string get_pki_name(const std::string &pki_file) {
-    return "ssh-ed25519";
-}
 
 void do_cleanup(int i) {
     /* unused variable */
@@ -79,19 +77,8 @@ std::vector<CryptoPP::byte> kex_algo_send() {
     return data;
 }
 
-std::shared_ptr<CryptoDriver> crypto_create(
-    const std::string &kex,
-    const std::string &key,
-    const std::string &ccipher,
-    const std::string &scipher,
-    const std::string &cmac,
-    const std::string &smac
-) {
-    return std::make_shared<CryptoDriver>();
-}
-
-std::shared_ptr<CryptoDriver> 
-kex_algo_recv(const std::vector<CryptoPP::byte> &data) {
+void kex_algo_recv(const std::vector<CryptoPP::byte> &data,
+        std::shared_ptr<CryptoDriver> crypto) {
     size_t idx = 0;
     CryptoPP::byte c;
     
@@ -126,7 +113,7 @@ kex_algo_recv(const std::vector<CryptoPP::byte> &data) {
     // get_integer_big(&reserved, data, idx);
 
     // Todo: according to the algorithm to create crypto driver
-    return crypto_create(kex, key, ccipher, scipher, cmac, smac);
+    return crypto->setup();
 }
 
 template<typename T>
@@ -172,13 +159,26 @@ SSHClient::SSHClient(
     std::string name, std::string pk_file, std::string address, int port)
     : name(name), pk_file(pk_file), address(address), port(port)
 {
+    this->crypto_driver = ::std::make_shared<CryptoDriver>();
     this->network_driver = ::std::make_shared<SSHNetworkDriver>();
     this->network_driver->connect(address, port);
 
     this->network_driver->ssh_send_banner();
     this->server_banner = this->network_driver->ssh_recv_banner();
     this->send_packet_id = this->recv_packet_id = 0;
-    this->client_auth_pki_name = get_pki_name(pk_file);
+    if (pk_file.find("ed25519") != std::string::npos) {
+        this->crypto_driver = std::make_shared<CryptoDriver>(
+            std::make_shared<ED25519>()
+        );
+    } 
+    /* todo: implement rsa sign scheme
+    else if (pk_file.find("rsa") != std::string::npos) {
+        crypto_driver->dsa = std::make_shared<RSADriver>();
+    } 
+    */
+    else {
+        throw std::runtime_error("unimplement pki algorithm");
+    }
 }
 
 uint32_t SSHClient::open_channel() {
@@ -321,7 +321,7 @@ void SSHClient::key_exchange() {
     auto client_kex_init = std::move(data); // store for hashing
 
     data = this->read();
-    this->crypto_driver = kex_algo_recv(data);
+    kex_algo_recv(data, crypto_driver);
     auto server_kex_init = std::move(data);
 
     auto [dh, priv, pub] = crypto_driver->DH_initialize();
@@ -458,7 +458,7 @@ void SSHClient::auth() {
     put_string(data, "ssh-connection");
     put_string(data, "publickey");
     data.push_back(1U); // flag for signature
-    put_string(data, this->client_auth_pki_name);
+    put_string(data, this->crypto_driver->get_pki_name());
 
     auto [priv, pub] = crypto_driver->import_auth_key(pk_file);
     crypto_driver->put_sign_pubkey(data, pub);
@@ -491,6 +491,7 @@ void SSHClient::SendThread(uint32_t id) {
 void SSHClient::run() {
     this->key_exchange();
     this->auth();
+    CUSTOM_LOG(lg, debug) << "test1";
     boost::thread msgListener =
       boost::thread(boost::bind(&SSHClient::ReceiveThread, this));
     auto id = this->open_channel();

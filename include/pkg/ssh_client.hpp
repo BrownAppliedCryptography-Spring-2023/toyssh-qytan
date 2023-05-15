@@ -32,7 +32,6 @@ private:
   std::vector<Channel> channels;
   std::string server_banner;
   std::string session_id;
-  std::string client_auth_pki_name;
   CryptoPP::SecByteBlock shared_key;
 
   CryptoPP::SecByteBlock iv_client_to_server;

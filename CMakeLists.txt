@@ -17,6 +17,7 @@ set(SOURCES
   src/pkg/ssh_channel.cxx
   src/drivers/network_driver.cxx
   src/drivers/crypto_driver.cxx
+  src/drivers/ed25519_driver.cxx
   src/util/messages.cxx
   src/util/logger.cxx
   src/util/util.cxx)

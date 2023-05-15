@@ -24,7 +24,26 @@
 
 #include "util/messages.hpp"
 
+class DSADriver {
+public:
+  virtual std::string get_name() = 0;
+  virtual std::pair<std::string, std::string> import_auth_key(const std::string &file) = 0;
+  virtual std::string DSA_sign(const std::string &pk, const std::vector<CryptoPP::byte> &input) = 0;
+  virtual bool DSA_verify(const std::string &vk, const std::string &message, const std::string signature) = 0;
+  virtual std::string get_sign_pubkey_blob_from_file(const std::vector<unsigned char> &data, size_t &idx) = 0;
+  virtual std::string get_sign_privkey_blob_from_file(const std::vector<unsigned char> &data, size_t &idx) = 0;
+
+  virtual std::string get_sign_pubkey(const std::vector<unsigned char> &data, size_t &idx) = 0;
+  virtual void put_sign_pubkey(std::vector<unsigned char> &data, const std::string &pub) = 0;
+  virtual std::string get_signature(const std::vector<unsigned char> &data, size_t &idx) = 0;
+  virtual void put_signature(std::vector<unsigned char> &data, const std::string &signature) = 0;
+};
+
 class CryptoDriver {
+public:
+  CryptoDriver() = default;
+  CryptoDriver(std::shared_ptr<DSADriver> dsa) : dsa(dsa) {}
+
 public:
   std::tuple<CryptoPP::x25519, CryptoPP::SecByteBlock, CryptoPP::SecByteBlock> DH_initialize();
   CryptoPP::SecByteBlock
@@ -48,6 +67,8 @@ public:
   std::string hash(std::string msg);
 
 public:
+  void setup() {} // todo: setup according to the algorithm;
+  std::string get_pki_name();
   std::pair<std::string, std::string> import_auth_key(const std::string &file);
   std::string get_session_id(
     std::string server_banner,
@@ -62,19 +83,16 @@ public:
   int put_shared_secret(std::vector<unsigned char> &buf, 
                       const unsigned char *x, long long len);
   
-  std::string get_sign_pubkey_from_file(const std::vector<unsigned char> &data, size_t &idx);
-  std::string get_sign_privkey_from_file(const std::vector<unsigned char> &data, size_t &idx);
+  std::string get_sign_pubkey_blob_from_file(const std::vector<unsigned char> &data, size_t &idx);
+  std::string get_sign_privkey_blob_from_file(const std::vector<unsigned char> &data, size_t &idx);
 
   std::string get_sign_pubkey(const std::vector<unsigned char> &data, size_t &idx);
   void put_sign_pubkey(std::vector<unsigned char> &data, const std::string &pub);
   std::string get_signature(const std::vector<unsigned char> &data, size_t &idx);
   void put_signature(std::vector<unsigned char> &data, const std::string &signature);
 
-  
 private:
-  std::string kex;
-  std::string pki;
-  std::string enc;
+  std::shared_ptr<DSADriver> dsa;
   CryptoPP::CTR_Mode< CryptoPP::AES >::Decryption d;
   CryptoPP::CTR_Mode< CryptoPP::AES >::Encryption e;
 };
