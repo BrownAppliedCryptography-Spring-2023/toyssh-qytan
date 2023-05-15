@@ -43,6 +43,9 @@ const CryptoPP::Integer DL_Q = CryptoPP::Integer(
 #define OPENSSH_HEADER_END "-----END OPENSSH PRIVATE KEY-----"
 #define OPENSSH_AUTH_MAGIC      "openssh-key-v1"
 
+#define CHANNEL_MAX_PACKET 32768
+#define CHANNEL_INITIAL_WINDOW 64000
+
 const std::string banner = "SSH-2.0-toy_ssh";
 
 const std::vector<std::string> kexs = {

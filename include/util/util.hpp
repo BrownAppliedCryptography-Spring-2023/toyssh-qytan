@@ -42,8 +42,8 @@ std::string get_string_from_file(const std::vector<unsigned char> &data, size_t 
 
 void put_chvec(std::vector<unsigned char> &buf, std::vector<unsigned char> &data);
 
-int buf_putsharedsecret_(std::vector<unsigned char> &buf, 
-                        const unsigned char *x, long long len);
+// int buf_putsharedsecret_(std::vector<unsigned char> &buf, 
+//                         const unsigned char *x, long long len);
 
 template<typename Integer,
     std::enable_if_t<std::is_integral<Integer>::value &&

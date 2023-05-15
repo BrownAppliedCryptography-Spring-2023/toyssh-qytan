@@ -1,5 +1,13 @@
 #pragma once
 
+namespace SSH_CHANNEL_REQ {
+    enum T {
+        PTY_SHELL,
+        EXEC,       // todo: implement it
+        X11         // todo: implement it
+    };
+}
+
 #define SSH_MSG_DISCONNECT                       1     /* 0x1 */
 #define SSH_MSG_IGNORE                           2     /* 0x2 */
 #define SSH_MSG_UNIMPLEMENTED                    3     /* 0x3 */

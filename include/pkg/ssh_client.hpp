@@ -1,8 +1,11 @@
 #pragma once
 
 #include <cryptopp/secblockfwd.h>
+#include <cstdint>
+#include <memory>
 #include <string>
 
+#include "pkg/ssh_channel.hpp"
 #include "drivers/network_driver.hpp"
 #include "drivers/crypto_driver.hpp"
 
@@ -10,23 +13,26 @@
 
 class SSHClient {
 public:
-  SSHClient(std::string name, std::string address, int port);
+  explicit SSHClient(
+    std::string name, std::string pk_file, std::string address, int port);
   ~SSHClient();
   void run();
 
-private:
+private:  
   uint32_t send_packet_id;
   uint32_t recv_packet_id;
-  std::string address;
   std::string name;
+  std::string pk_file;
+  std::string address;
   int port;
   bool kex = false;
   std::shared_ptr<CryptoDriver> crypto_driver;
   std::shared_ptr<SSHNetworkDriver> network_driver;
 
+  std::vector<Channel> channels;
   std::string server_banner;
   std::string session_id;
-  std::string sign_pk;
+  std::string client_auth_pki_name;
   CryptoPP::SecByteBlock shared_key;
 
   CryptoPP::SecByteBlock iv_client_to_server;
@@ -41,4 +47,11 @@ private:
   void key_derive();
   void key_exchange();
   void auth();
+  uint32_t open_channel();
+  void close_channel(uint32_t id);
+  void handle_channel_request(uint32_t id, std::vector<CryptoPP::byte> &data);
+  
+  void ReceiveThread();
+  void SendThread(uint32_t id);
+  friend class Channel;
 };

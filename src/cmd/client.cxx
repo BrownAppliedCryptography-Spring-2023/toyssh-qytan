@@ -16,7 +16,7 @@
 int main(int argc, char **argv) {
     initLogger();
 
-    SSHClient client("qiyetan", "localhost", 22);
+    SSHClient client("qiyetan", "/home/qiyetan/.ssh/id_ed25519", "localhost", 22);
     client.run();
     return 0;
 }

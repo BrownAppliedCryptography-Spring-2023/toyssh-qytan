@@ -96,6 +96,10 @@ std::vector<unsigned char> SSHNetworkDriver::read(size_t size) {
 
   auto n = boost::asio::read(*this->socket, boost::asio::buffer(data),
                     boost::asio::transfer_exactly(size), error);
+  if (n != size) {
+    CUSTOM_LOG(lg, error) << "expected size: " << size << " real size: " << n;
+    throw std::runtime_error("read failed");
+  }
   assert(n == size);
   if (error) {
     throw std::runtime_error("Received EOF.");

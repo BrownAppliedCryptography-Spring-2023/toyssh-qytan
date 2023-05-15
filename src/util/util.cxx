@@ -143,24 +143,3 @@ void put_chvec(std::vector<unsigned char> &data, std::vector<unsigned char> &vec
     put_integer_big(static_cast<uint32_t>(vec.size()), data);
     data.insert(data.end(), vec.begin(), vec.end());
 }
-
-/*
-Put SSH shared secret (bignum formated into wire format)
-*/
-int buf_putsharedsecret_(std::vector<unsigned char> &buf, 
-                      const unsigned char *x, long long len) {
-
-    long long pos;
-    for (pos = 0; pos < len; ++pos) if (x[pos]) break;
-
-    if (x[pos] & 0x80) {
-        put_integer_big(static_cast<uint32_t>(len - pos + 1), buf);
-        put_integer_big(0_u8, buf);
-    }
-    else {
-        put_integer_big(static_cast<uint32_t>(len - pos + 0), buf);
-    }
-    
-    while (pos < len) buf.push_back(x[pos++]);
-    return len;
-}

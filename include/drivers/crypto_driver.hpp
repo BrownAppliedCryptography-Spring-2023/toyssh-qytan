@@ -24,49 +24,57 @@
 
 #include "util/messages.hpp"
 
-namespace ALGO_TYPE {
-enum T {
-    KEX,
-    HOST_KEY,
-    ENCRYPT_CLIENT_TO_SERVER,
-    ENCRYPT_SERVER_TO_CLIENT,
-    MAC_CLIENT_TO_SERVER,
-    MAC_SERVER_TO_CLIENT,
-    COMPRESS_CLIENT_TO_SERVER,
-    COMPRESS_SERVER_TO_CLIENT,
-};
-}
-
 class CryptoDriver {
 public:
-  std::tuple<CryptoPP::x25519, CryptoPP::SecByteBlock, CryptoPP::SecByteBlock> curve25519_initialize();
+  std::tuple<CryptoPP::x25519, CryptoPP::SecByteBlock, CryptoPP::SecByteBlock> DH_initialize();
   CryptoPP::SecByteBlock
-  curve25519_generate_shared_key(const CryptoPP::x25519 &DH_obj, const CryptoPP::SecByteBlock &DH_private_value,
+  DH_generate_shared_key(const CryptoPP::x25519 &DH_obj, const CryptoPP::SecByteBlock &DH_private_value,
                          const CryptoPP::SecByteBlock &DH_other_public_value);
 
-  bool ed25519_verify(const std::string &vk, const std::string &message, const std::string signature);
+  std::string DSA_sign(const std::string &pk, const std::vector<CryptoPP::byte> &input);
+  bool DSA_verify(const std::string &vk, const std::string &message, const std::string signature);
 
-  CryptoPP::SecByteBlock AES_generate_key(const CryptoPP::SecByteBlock &DH_shared_key);
-  void AES_encrypt(const std::vector<unsigned char> &plaintext, std::vector<unsigned char> &cipher);
-  void AES_decrypt(const std::vector<unsigned char> &ciphertext, std::vector<unsigned char> &recover);
+  void Enc_setup(const CryptoPP::SecByteBlock &enc_key, const CryptoPP::SecByteBlock &enc_iv,
+            const CryptoPP::SecByteBlock &dec_key, const CryptoPP::SecByteBlock &dec_iv);
+  void Enc_encrypt(const std::vector<unsigned char> &plaintext, std::vector<unsigned char> &cipher);
+  void Enc_decrypt(const std::vector<unsigned char> &ciphertext, std::vector<unsigned char> &recover);
 
-  CryptoPP::SecByteBlock HMAC_generate_key(const CryptoPP::SecByteBlock &DH_shared_key);
   std::vector<CryptoPP::byte> HMAC_generate(CryptoPP::SecByteBlock key, const std::vector<CryptoPP::byte> &ciphertext);
   bool HMAC_verify(CryptoPP::SecByteBlock key, std::string ciphertext, std::string hmac);
 
-
-  void Enc_Setup(const CryptoPP::SecByteBlock &enc_key, const CryptoPP::SecByteBlock &enc_iv,
-            const CryptoPP::SecByteBlock &dec_key, const CryptoPP::SecByteBlock &dec_iv);
   CryptoPP::SecByteBlock prg(const CryptoPP::SecByteBlock &seed, CryptoPP::SecByteBlock iv, int size);
   CryptoPP::Integer nowish();
   CryptoPP::SecByteBlock png(int numBytes);
   std::string hash(std::string msg);
-  void algo_select(std::string& choices, ALGO_TYPE::T);
 
+public:
+  std::pair<std::string, std::string> import_auth_key(const std::string &file);
+  std::string get_session_id(
+    std::string server_banner,
+    std::string client_banner,
+    std::vector<unsigned char> &client_kex_init,
+    std::vector<unsigned char> &server_kex_init,
+    std::string host_key,
+    CryptoPP::SecByteBlock client_pub,
+    CryptoPP::SecByteBlock server_pub,
+    CryptoPP::SecByteBlock shared_key
+  );
+  int put_shared_secret(std::vector<unsigned char> &buf, 
+                      const unsigned char *x, long long len);
+  
+  std::string get_sign_pubkey_from_file(const std::vector<unsigned char> &data, size_t &idx);
+  std::string get_sign_privkey_from_file(const std::vector<unsigned char> &data, size_t &idx);
+
+  std::string get_sign_pubkey(const std::vector<unsigned char> &data, size_t &idx);
+  void put_sign_pubkey(std::vector<unsigned char> &data, const std::string &pub);
+  std::string get_signature(const std::vector<unsigned char> &data, size_t &idx);
+  void put_signature(std::vector<unsigned char> &data, const std::string &signature);
+
+  
 private:
-  std::string kex_name;
-  std::string pki_name;
-  std::string enc_name;
+  std::string kex;
+  std::string pki;
+  std::string enc;
   CryptoPP::CTR_Mode< CryptoPP::AES >::Decryption d;
   CryptoPP::CTR_Mode< CryptoPP::AES >::Encryption e;
 };
