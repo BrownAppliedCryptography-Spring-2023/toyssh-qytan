@@ -149,7 +149,7 @@ std::vector<CryptoPP::byte> channel_request_pty(uint32_t id) {
     put_integer_big(row, data);
     put_integer_big(pix, data);
     put_integer_big(pix, data);
-    put_string(data, "\0");         /* add a 0byte string */
+    put_string(data, "\0");         /* encoded terminal mode (0byte string) */
     return data;
 }
 
